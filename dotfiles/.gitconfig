@@ -1,0 +1,5 @@
+[user]
+	email = edison@ecwk.sh
+	name = Edison Chan
+[init]
+	defaultBranch = main
