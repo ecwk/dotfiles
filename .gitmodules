@@ -1,3 +1,6 @@
 [submodule "dotfiles/.config/nvim"]
 	path = dotfiles/.config/nvim
 	url = https://github.com/ecwk/neovim.config.git
+[submodule "dotfiles/.config/hypr"]
+	path = dotfiles/.config/hypr
+	url = https://github.com/ecwk/hyprland.config.git
