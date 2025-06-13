@@ -93,7 +93,7 @@ plugins=(
 	command-not-found # https://github.com/ohmyzsh/ohmyzsh/tree/master/plugins/command-not-found
 	zsh-syntax-highlighting # https://github.com/zsh-users/zsh-syntax-highlighting
 	zsh-autosuggestions # https://github.com/zsh-users/zsh-autosuggestions
-  zsh-vi-mode # https://github.com/jeffreytse/zsh-vi-mode
+    zsh-vi-mode # https://github.com/jeffreytse/zsh-vi-mode
 )
 
 source $ZSH/oh-my-zsh.sh
@@ -111,6 +111,8 @@ source $ZSH/oh-my-zsh.sh
 # else
 #   export EDITOR='nvim'
 # fi
+
+export EDITOR="nvim"
 
 # Compilation flags
 # export ARCHFLAGS="-arch $(uname -m)"
@@ -141,3 +143,20 @@ eval "$(pyenv init - zsh)"
 # Created by `pipx` on 2025-05-10 18:00:47
 export PATH="$PATH:/home/ecwk/.local/bin"
 
+# pnpm
+export PNPM_HOME="/home/ecwk/.local/share/pnpm"
+case ":$PATH:" in
+  *":$PNPM_HOME:"*) ;;
+  *) export PATH="$PNPM_HOME:$PATH" ;;
+esac
+# pnpm end
+#
+# The plugin will auto execute this zvm_after_lazy_keybindings function
+function zvm_after_init() {
+    zvm_bindkey vicmd '^P' up-line-or-beginning-search
+    zvm_bindkey vicmd '^N' down-line-or-beginning-search
+    zvm_bindkey viins '^P' up-line-or-beginning-search
+    zvm_bindkey viins '^N' down-line-or-beginning-search
+    # bindkey -M vicmd 's' your_normal_widget
+    # bindkey -M visual 'n' your_visual_widget
+}
