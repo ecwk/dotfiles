@@ -160,3 +160,16 @@ function zvm_after_init() {
     # bindkey -M vicmd 's' your_normal_widget
     # bindkey -M visual 'n' your_visual_widget
 }
+
+# bun completions
+[ -s "/home/ecwk/.bun/_bun" ] && source "/home/ecwk/.bun/_bun"
+
+# bun
+export BUN_INSTALL="$HOME/.bun"
+export PATH="$BUN_INSTALL/bin:$PATH"
+
+source ~/.zsh.completion-pnpm
+
+autoload bashcompinit && bashcompinit
+autoload -Uz compinit && compinit
+complete -C '/usr/bin/aws_completer' aws
