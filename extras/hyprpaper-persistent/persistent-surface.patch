@@ -1,0 +1,55 @@
+diff --git a/src/ui/UI.cpp b/src/ui/UI.cpp
+index 71308af..9a4469c 100644
+--- a/src/ui/UI.cpp
++++ b/src/ui/UI.cpp
+@@ -124,6 +124,22 @@ CWallpaperTarget::~CWallpaperTarget() {
+         m_timer->cancel();
+ }
+ 
++// Keep the mapped background surface while synchronously replacing its image.
++// Destroying the target exposes the compositor wallpaper between IPC selections.
++void CWallpaperTarget::replaceImage(const std::string& path, Hyprtoolkit::eImageFitMode fitMode) {
++    if (m_timer && !m_timer->passed())
++        m_timer->cancel();
++    m_imagesData.reset();
++    m_image->rebuild()
++        ->path(std::string{path})
++        ->size({Hyprtoolkit::CDynamicSize::HT_SIZE_PERCENT, Hyprtoolkit::CDynamicSize::HT_SIZE_PERCENT, {1.F, 1.F}})
++        ->sync(true)
++        ->fitMode(fitMode)
++        ->commence();
++    m_lastPath = path;
++    IPC::g_IPCSocket->onWallpaperChanged(m_monitorName, m_lastPath);
++}
++
+ void CWallpaperTarget::onRepeatTimer() {
+ 
+     ASSERT(m_imagesData);
+@@ -237,6 +253,15 @@ void CUI::targetChanged(const SP<Hyprtoolkit::IOutput>& mon) {
+         return;
+     }
+ 
++    if (TARGET->get().paths.size() == 1) {
++        for (const auto& target : m_targets) {
++            if (target->m_monitorName == mon->port()) {
++                target->replaceImage(TARGET->get().paths.front(), toFitMode(TARGET->get().fitMode));
++                return;
++            }
++        }
++    }
++
+     std::erase_if(m_targets, [&mon](const auto& e) { return e->m_monitorName == mon->port(); });
+ 
+     m_targets.emplace_back(makeShared<CWallpaperTarget>(m_backend, mon, TARGET->get().paths, toFitMode(TARGET->get().fitMode), TARGET->get().timeout, TARGET->get().order));
+diff --git a/src/ui/UI.hpp b/src/ui/UI.hpp
+index 6ae4bc4..8419515 100644
+--- a/src/ui/UI.hpp
++++ b/src/ui/UI.hpp
+@@ -19,6 +19,7 @@ class CWallpaperTarget {
+     CWallpaperTarget(SP<Hyprtoolkit::IBackend> backend, SP<Hyprtoolkit::IOutput> output, const std::vector<std::string>& path,
+                      Hyprtoolkit::eImageFitMode fitMode = Hyprtoolkit::IMAGE_FIT_MODE_COVER, const int timeout = 0, const std::string& order = "default");
+     ~CWallpaperTarget();
++    void replaceImage(const std::string& path, Hyprtoolkit::eImageFitMode fitMode);
+ 
+     CWallpaperTarget(const CWallpaperTarget&) = delete;
+     CWallpaperTarget(CWallpaperTarget&)       = delete;
