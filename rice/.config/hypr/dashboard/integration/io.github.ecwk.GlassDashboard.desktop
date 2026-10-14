@@ -2,7 +2,7 @@
 Type=Application
 Name=Glass Dashboard
 Comment=Edit your desktop widgets
-Exec=glass-dashboard --edit
+Exec=vicinae deeplink vicinae://extensions/ecwk/glass-dashboard/dashboard
 Icon=preferences-desktop-display
 Terminal=false
 Categories=Utility;

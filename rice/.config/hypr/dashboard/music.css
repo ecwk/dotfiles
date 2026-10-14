@@ -1,0 +1,13 @@
+/* Compact lock-screen hierarchy; allocation follows the selected layout. */
+.music-card { padding: 10px 18px; border-radius: 22px; border: none; }
+.music-card .track { font-size: 19px; font-weight: 600; }
+.music-card .art { border-radius: 5px; }
+.music-card button.transport { background: transparent; border: none; padding: 0 8px; min-height: 0; }
+.music-card button.transport:hover { background: rgba(255,255,255,.12); }
+.music-card progressbar trough, .music-card progressbar progress { min-height: 5px; border-radius: 4px; }
+.music-card.art-colors { background: transparent; color: #ffffff; }
+.music-card.art-colors .track, .music-card.art-colors button.transport { color: #ffffff; }
+.music-card.art-colors .subtitle { color: rgba(255,255,255,.80); }
+.music-card.art-colors progressbar progress { background: #ffffff; }
+.music-card.art-colors progressbar trough { background: rgba(255,255,255,.30); }
+.music-card.art-colors button:focus-visible { outline-color: white; }

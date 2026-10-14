@@ -18,3 +18,6 @@ rice/.local/share/walltheme/swatches/
 **/.env
 **/.env.*
 **/?*.local
+
+# Generated from the committed semantic palette at login/settings changes
+rice/.config/waybar/theme.css

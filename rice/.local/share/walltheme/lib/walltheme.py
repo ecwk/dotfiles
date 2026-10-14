@@ -112,7 +112,83 @@ def publish(image, mode="dark"):
     record = extract(image)
     record.update(mode=mode, colors=record["palettes"][mode])
     atomic(STATE / "current.json", record)
+    apply_adapters(record)
     return record
+
+# Shared appearance is separate from palette caches and dashboard layout.
+def appearance():
+    saved = read_json(STATE / "appearance.json", {})
+    legacy = read_json(STATE.parent / "glass-dashboard/settings.json", {})
+    value = saved.get("style", legacy.get("theme_mode", "full"))
+    return value if value in ("full", "accents", "original") else "full"
+
+def waybar_css(style, colors):
+    if style == "original" or not colors:
+        return "/* Application defaults. Managed by walltheme. */\n"
+    if not all(re.fullmatch(r"#[0-9a-fA-F]{6}", colors.get(k, "")) for k in ROLES):
+        raise RuntimeError("Invalid theme colors")
+    a = colors["accent"]
+    gray = round(sum(int(colors["foreground"][i:i+2], 16) for i in (1, 3, 5)) / 3)
+    neutral = f"#{gray:02X}{gray:02X}{gray:02X}" if style == "full" else "@foreground"
+    # Accent-only retains the bar's own neutrals. Full uses semantic neutrals.
+    fg = colors["foreground"] if style == "full" else "@foreground"
+    bg = colors["background"] if style == "full" else "@background"
+    muted = f"mix({bg}, mix({fg}, {a}, 0.2), 0.62)"
+    css = f"""/* Managed by walltheme; edit appearance through Theme Settings. */
+/* All workspace states share the bar background; selection is text and line only. */
+#workspaces button, #workspaces button.active, #workspaces button:hover {{ background: transparent; }}
+#workspaces button {{ color: {muted}; }}
+#workspaces button.active {{ color: {a}; box-shadow: inset 0 -3px {a}; }}
+#workspaces button.active label {{ padding-bottom: 4px; }}
+#workspaces button:hover {{ color: {a}; }}
+#clock {{ color: mix({fg}, {a}, 0.35); }}
+#custom-nus-week {{ color: {muted}; }}
+#bluetooth, #network, #pulseaudio, #battery, #power-profiles-daemon,
+#temperature, #backlight, #mpd, #privacy-item {{ color: {neutral}; }}
+#bluetooth.off, #bluetooth.disabled, #network.disconnected,
+#network.disabled, #pulseaudio.muted {{ color: alpha({neutral}, 0.45); }}
+"""
+    if style == "full":
+        surface, border = colors["surface"], colors["border"]
+        css += f"""
+window#waybar {{ color: {fg}; background-color: alpha({bg}, 0.8); }}
+#workspaces button.active, #workspaces button:hover {{ color: {a}; }}
+tooltip {{ background-color: {surface}; border: 1px solid {border}; }}
+tooltip label {{ color: {fg}; }}
+"""
+    return css
+
+def sync_waybar(record):
+    directory = xdg("XDG_CONFIG_HOME", ".config") / "waybar"
+    # Only opt in configurations that include our adapter.
+    style = directory / "style.css"
+    if style.exists() and 'theme.css' in style.read_text():
+        target = directory / "theme.css"
+        content = waybar_css(appearance(), record.get("colors")).encode()
+        if not target.exists() or target.read_bytes() != content:
+            atomic(target, content)
+
+# Register future application adapters here. Each consumes the same semantic
+# palette and appearance settings; preview generation never invokes adapters.
+ADAPTERS = {"waybar": sync_waybar}
+
+def apply_adapters(record):
+    for adapter in ADAPTERS.values():
+        adapter(record)
+
+def theme_settings(style=None, mode=None):
+    record = read_json(STATE / "current.json", {})
+    if mode:
+        if not record.get("palettes"):
+            raise RuntimeError("Apply a wallpaper first to enable light/dark mode")
+        record.update(mode=mode, colors=record["palettes"][mode])
+    if style or not (STATE / "appearance.json").exists():
+        saved = read_json(STATE / "appearance.json", {})
+        atomic(STATE / "appearance.json", {**saved, "schemaVersion": 1, "style": style or appearance()})
+    if mode:
+        atomic(STATE / "current.json", record)
+    apply_adapters(record)
+    return {"schemaVersion": 1, "style": appearance(), "mode": record.get("mode", "dark"), "available": bool(record.get("colors"))}
 
 def active():
     text = run(["hyprctl", "hyprpaper", "listactive"], 5)
@@ -320,6 +396,7 @@ def login_restore():
     if not (STATE / "current.json").exists():
         image = settings().get("Settings", "wallpaper").splitlines()[0]
         publish(image)
+    theme_settings()
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
@@ -328,10 +405,12 @@ def main():
     for name in ("scan", "list", "restore", "initialize"): sub.add_parser(name)
     p = sub.add_parser("get"); p.add_argument("role", choices=ROLES); p.add_argument("--image"); p.add_argument("--mode", choices=("dark", "light"))
     p = sub.add_parser("export"); p.add_argument("--format", choices=("json", "shell"), default="json"); p.add_argument("--mode", choices=("dark", "light"))
+    p = sub.add_parser("settings"); p.add_argument("--style", choices=("full", "accents", "original")); p.add_argument("--mode", choices=("dark", "light"))
     p = sub.add_parser("serve"); p.add_argument("token")
     sub.add_parser("socket")
     args = parser.parse_args()
-    if args.command == "extract": result = extract(args.image)
+    if args.command == "settings": result = theme_settings(args.style, args.mode)
+    elif args.command == "extract": result = extract(args.image)
     elif args.command == "scan": result = scan()
     elif args.command == "list": result = collection()
     elif args.command == "initialize":

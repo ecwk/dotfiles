@@ -1,0 +1,242 @@
+{
+  "balanced-center": {
+    "title": "Balanced center",
+    "anchor": "center",
+    "widgets": {
+      "music": {
+        "x": 0,
+        "y": 0,
+        "w": 696,
+        "h": 146
+      },
+      "system": {
+        "x": 0,
+        "y": 154,
+        "w": 370,
+        "h": 151
+      },
+      "visualiser": {
+        "x": 378,
+        "y": 154,
+        "w": 318,
+        "h": 151
+      },
+      "btop": {
+        "x": 0,
+        "y": 313,
+        "w": 696,
+        "h": 400
+      }
+    }
+  },
+  "compact-bento": {
+    "title": "Compact bento",
+    "anchor": "center",
+    "widgets": {
+      "music": {
+        "x": 0,
+        "y": 0,
+        "w": 898,
+        "h": 146
+      },
+      "system": {
+        "x": 0,
+        "y": 154,
+        "w": 370,
+        "h": 151
+      },
+      "visualiser": {
+        "x": 0,
+        "y": 313,
+        "w": 370,
+        "h": 201
+      },
+      "btop": {
+        "x": 378,
+        "y": 154,
+        "w": 520,
+        "h": 360
+      }
+    }
+  },
+  "floating-corners": {
+    "title": "Floating corners",
+    "anchor": "center",
+    "widgets": {
+      "music": {
+        "x": 0,
+        "y": 0,
+        "w": 600,
+        "h": 146
+      },
+      "visualiser": {
+        "x": 986,
+        "y": 0,
+        "w": 318,
+        "h": 151
+      },
+      "system": {
+        "x": 0,
+        "y": 601,
+        "w": 370,
+        "h": 151
+      },
+      "btop": {
+        "x": 684,
+        "y": 392,
+        "w": 620,
+        "h": 360
+      }
+    }
+  },
+  "bottom-command-deck": {
+    "title": "Bottom command deck",
+    "anchor": "bottom",
+    "widgets": {
+      "music": {
+        "x": 0,
+        "y": 0,
+        "w": 748,
+        "h": 201
+      },
+      "system": {
+        "x": 0,
+        "y": 209,
+        "w": 370,
+        "h": 151
+      },
+      "visualiser": {
+        "x": 378,
+        "y": 209,
+        "w": 370,
+        "h": 151
+      },
+      "btop": {
+        "x": 756,
+        "y": 0,
+        "w": 520,
+        "h": 360
+      }
+    }
+  },
+  "system-monitor-first": {
+    "title": "System monitor first",
+    "anchor": "center",
+    "widgets": {
+      "btop": {
+        "x": 0,
+        "y": 0,
+        "w": 696,
+        "h": 550
+      },
+      "music": {
+        "x": 704,
+        "y": 0,
+        "w": 500,
+        "h": 146
+      },
+      "visualiser": {
+        "x": 704,
+        "y": 154,
+        "w": 500,
+        "h": 237
+      },
+      "system": {
+        "x": 704,
+        "y": 399,
+        "w": 500,
+        "h": 151
+      }
+    }
+  },
+  "staggered-editorial": {
+    "title": "Staggered editorial",
+    "anchor": "center",
+    "widgets": {
+      "music": {
+        "x": 0,
+        "y": 0,
+        "w": 600,
+        "h": 146
+      },
+      "system": {
+        "x": 120,
+        "y": 170,
+        "w": 370,
+        "h": 151
+      },
+      "visualiser": {
+        "x": 510,
+        "y": 170,
+        "w": 370,
+        "h": 151
+      },
+      "btop": {
+        "x": 400,
+        "y": 340,
+        "w": 620,
+        "h": 360
+      }
+    }
+  },
+  "wide-terrace": {
+    "title": "Wide terrace",
+    "anchor": "center",
+    "widgets": {
+      "music": {
+        "x": 68,
+        "y": 0,
+        "w": 560,
+        "h": 146
+      },
+      "system": {
+        "x": 0,
+        "y": 154,
+        "w": 370,
+        "h": 151
+      },
+      "visualiser": {
+        "x": 378,
+        "y": 154,
+        "w": 318,
+        "h": 151
+      },
+      "btop": {
+        "x": 10,
+        "y": 313,
+        "w": 676,
+        "h": 360
+      }
+    }
+  },
+  "stacked-canopy": {
+    "title": "Stacked canopy",
+    "anchor": "center",
+    "widgets": {
+      "music": {
+        "x": 199,
+        "y": 0,
+        "w": 500,
+        "h": 146
+      },
+      "visualiser": {
+        "x": 219,
+        "y": 154,
+        "w": 460,
+        "h": 151
+      },
+      "system": {
+        "x": 0,
+        "y": 313,
+        "w": 370,
+        "h": 300
+      },
+      "btop": {
+        "x": 378,
+        "y": 313,
+        "w": 520,
+        "h": 360
+      }
+    }
+  }
+}

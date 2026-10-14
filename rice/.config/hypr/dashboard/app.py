@@ -8,8 +8,7 @@ import signal
 import shutil
 import subprocess
 import time
-from datetime import datetime
-from zoneinfo import ZoneInfo
+import re
 import gi
 # Layer shell must load before GTK initializes Wayland (launcher also uses LD_PRELOAD).
 gi.require_version('Gtk4LayerShell','1.0')
@@ -19,8 +18,11 @@ gi.require_version('Gdk','4.0')
 gi.require_version('Vte','3.91')
 gi.require_version('GLibUnix','2.0')
 from gi.repository import Gtk,Gdk,Gio,GLib,GLibUnix,Pango,Vte
-from core import ROOT,STATE,TITLES,Store,academic,clamp_rect,default_layout,minimum_for,command,read_json,write_json,search_places,weather_for,conditions
-from services import Jobs,Spectrum,Location,media_snapshot,media_action,artwork_bytes
+from core import ROOT,STATE,TITLES,Store,PRESETS,command,read_json,write_json
+from gpu import gpu_name
+from theme import read_appearance,MODES,THEME_FILE,read_palette,css,terminal_colors,btop_theme
+from music_art import ArtworkBackdrop
+from services import Jobs,Spectrum,media_snapshot,media_action,artwork_bytes
 
 def box(vertical=True,spacing=8): return Gtk.Box(orientation=Gtk.Orientation.VERTICAL if vertical else Gtk.Orientation.HORIZONTAL,spacing=spacing)
 def label(text='',css=None,wrap=False):
@@ -56,66 +58,18 @@ class Panel(Gtk.ApplicationWindow):
         Layer.set_anchor(self,Layer.Edge.TOP,True)
         self.root=box(spacing=10); self.root.add_css_class('glass')
         self.root.set_overflow(Gtk.Overflow.HIDDEN)
-        if key=='controls': self.root.add_css_class('dock')
         self.content=box(); self.content.set_vexpand(True)
         self.root.append(self.content)
-        self.overlay=Gtk.Overlay(); self.overlay.set_child(self.root)
-        self.move_handle=label('⠿','handle')
-        self.move_handle.set_halign(Gtk.Align.CENTER); self.move_handle.set_valign(Gtk.Align.START)
-        self.move_handle.set_size_request(42,18); self.move_handle.set_tooltip_text('Move widget')
-        self.resize=label('◢','handle')
-        self.resize.set_halign(Gtk.Align.END); self.resize.set_valign(Gtk.Align.END)
-        self.resize.set_size_request(22,22); self.resize.set_tooltip_text('Resize widget')
-        self.overlay.add_overlay(self.move_handle); self.overlay.add_overlay(self.resize)
-        self.set_child(self.overlay)
-        for widget,mode in [(self.move_handle,'move'),(self.resize,'resize')]:
-            gesture=Gtk.GestureDrag()
-            gesture.connect('drag-begin',self.begin,mode)
-            gesture.connect('drag-update',self.drag,mode)
-            gesture.connect('drag-end',self.drag_end,mode)
-            widget.add_controller(gesture)
-        self.connect('close-request',self.close_requested)
-        self.edit(False)
-    def close_requested(self,*_):
-        # Compositor close must not destroy one panel silently.
-        return True
-    def begin(self,gesture,x,y,mode):
-        self.origin=dict(self.app.layout[self.key])
-        if not self.app.editing:
-            gesture.set_state(Gtk.EventSequenceState.DENIED); return
-        try: self.pointer_origin=json.loads(command(['hyprctl','cursorpos','-j'],timeout=1))
-        except Exception: self.pointer_origin=None
-    def drag(self,gesture,dx,dy,mode):
-        if not self.app.editing: return
-        r=dict(self.origin)
-        # Surface-local gesture coordinates shift while the layer window moves.
-        # Hyprland's global pointer coordinates keep dragging stable.
-        if self.pointer_origin is not None:
-            try:
-                pointer=json.loads(command(['hyprctl','cursorpos','-j'],timeout=1))
-                dx=pointer['x']-self.pointer_origin['x']; dy=pointer['y']-self.pointer_origin['y']
-            except Exception: pass
-        if mode=='move': r['x']+=int(dx); r['y']+=int(dy)
-        else: r['w']+=int(dx); r['h']+=int(dy)
-        self.app.layout[self.key]=clamp_rect(r,self.app.width,self.app.height,minimum_for(self.key))
-        self.place()
-    def drag_end(self,gesture,dx,dy,mode):
-        self.drag(gesture,dx,dy,mode)
-        self.app.save_layout()
-    def edit(self,enabled):
-        self.resize.set_visible(enabled)
-        self.move_handle.set_visible(enabled)
-        self.move_handle.set_cursor_from_name('move')
-        self.resize.set_cursor_from_name('se-resize')
-        if enabled: self.root.add_css_class('editing')
-        else: self.root.remove_css_class('editing')
+        self.set_child(self.root)
+        self.connect('close-request',lambda *_:True)
     def place(self):
         r=self.app.layout[self.key]
         Layer.set_monitor(self,self.app.monitor)
         Layer.set_margin(self,Layer.Edge.LEFT,r['x'])
         Layer.set_margin(self,Layer.Edge.TOP,r['y'])
         self.set_default_size(r['w'],r['h'])
-        self.set_visible(r['visible'] or self.key=='controls')
+        if self.key=='music' and hasattr(self.app,'music'): self.app.music.resize(r['w'],r['h'])
+        self.set_visible(r['visible'])
 
 class TerminalWidget:
     def __init__(self,app,panel,program='btop'):
@@ -129,7 +83,7 @@ class TerminalWidget:
         self.terminal.set_clear_background(False)
         self.terminal.set_scrollback_lines(200)
         self.terminal.set_vexpand(True); self.terminal.set_hexpand(True)
-        columns,rows={'btop':(80,24),'bluetui':(32,20),'fastfetch':(52,9)}[program]
+        columns,rows={'btop':(80,24)}[program]
         self.terminal.set_size(columns,rows)
         self.terminal.connect('child-exited',self.exited)
         panel.content.append(self.terminal)
@@ -162,17 +116,20 @@ class TerminalWidget:
     def launch(self):
         if self.closed or self.starting or self.pid: return
         self.starting=True
+        self.launched_theme=btop_theme(self.app.palette) if self.program=='btop' and self.app.btop_themed() else None
         self.terminal.reset(True,True)
         # Keep the terminal background transparent while restoring its normal ANSI palette.
-        self.terminal.set_colors(colour('#e8e8e8'),colour('rgba(0,0,0,0)'),[])
-        filename={'btop':'btop.conf','bluetui':'bluetui.toml','fastfetch':'fastfetch.jsonc'}[self.program]
+        self.app.color_terminal(self.terminal,self.program)
+        filename={'btop':'btop.conf'}[self.program]
         config=STATE/filename; config.parent.mkdir(parents=True,exist_ok=True)
         shutil.copyfile(ROOT/'data'/filename,config)
+        if self.program=='btop' and self.app.btop_themed():
+            theme_path=STATE/'walltheme.theme'
+            theme_path.write_text(btop_theme(self.app.palette))
+            config.write_text(config.read_text().replace('color_theme = "Default"',f'color_theme = "{theme_path}"'))
         self.status.set_visible(False)
         argv={
-            'btop':['/usr/bin/btop','--config',str(config)],
-            'bluetui':['/usr/bin/bluetui','-c',str(config)],
-            'fastfetch':['/usr/bin/fastfetch','--config',str(config),'--detect-version','true','--watch','30'],
+            'btop':['/usr/bin/btop','--config',str(config),'--themes-dir',str(STATE)],
         }[self.program]
         env=[f'{k}={v}' for k,v in os.environ.items() if k not in ('TERM','LD_PRELOAD')]+['TERM=xterm-256color']
         self.terminal.spawn_async(Vte.PtyFlags.DEFAULT,str(STATE),argv,env,GLib.SpawnFlags(Vte.SPAWN_NO_SYSTEMD_SCOPE),None,None,-1,None,self.spawned,None)
@@ -187,6 +144,8 @@ class TerminalWidget:
             return
         self.pid=pid; self.started_at=time.monotonic()
         if self.closed: self.stop()
+        elif self.program=='btop' and self.launched_theme!=(btop_theme(self.app.palette) if self.app.btop_themed() else None):
+            self.restart()
     def exited(self,terminal,status):
         self.pid=None
         if self.closed: return
@@ -202,43 +161,133 @@ class TerminalWidget:
             try: os.kill(self.pid,signal.SIGKILL)
             except ProcessLookupError: pass
 
+class FastfetchWidget:
+    """Render native Fastfetch output without a watch-mode PTY scrolling its logo."""
+    def __init__(self,app,panel):
+        self.app=app; self.panel=panel; self.output=b''
+        self.terminal=Vte.Terminal()
+        self.terminal.add_css_class('fastfetch')
+        self.terminal.set_font(Pango.FontDescription('monospace 8'))
+        self.terminal.set_clear_background(False)
+        self.terminal.set_scrollback_lines(0)
+        self.terminal.set_input_enabled(False)
+        self.columns=52
+        self.terminal.set_size(self.columns,9)
+        self.terminal.set_hexpand(True); self.terminal.set_vexpand(True)
+        self.terminal.set_halign(Gtk.Align.CENTER); self.terminal.set_valign(Gtk.Align.CENTER)
+        panel.content.append(self.terminal)
+        # Fit the character grid inside the fixed preset panel.
+        self.fit()
+        self.refresh(); repeat(30,self.refresh)
+    def fit(self):
+        # Presets own panel bounds; fit the text within them without moving edges.
+        r=self.app.layout['system']
+        size=min(8, 8*(r['w']-34)/(self.columns*6), 8*(r['h']-34)/(9*13))
+        self.terminal.set_font(Pango.FontDescription(f'monospace {max(4,size):.2f}'))
+    def refresh(self):
+        config=read_json(ROOT/'data/fastfetch.jsonc',{})
+        if self.app.theme_mode!='original' and self.app.palette:
+            accent=self.app.palette['accent']
+            config['logo']['color']={'1':accent,'2':accent}
+            config['display']['color']['keys']=accent
+        # Pass a snapshot as data so an in-flight refresh cannot race a config rewrite.
+        def work():
+            name=gpu_name()
+            if name:
+                config['modules']=[m for m in config['modules'] if not (m.get('type')=='custom' and m.get('key')=='gpu')]
+                for i,m in enumerate(config['modules']):
+                    if m.get('type')=='gpu': config['modules'][i]={'type':'custom','key':'gpu','format':name}
+            columns=max(52,22+len(name or ''))
+            config_json=json.dumps(config)
+            result=subprocess.run(['/usr/bin/fastfetch','--config','-',
+                                   '--detect-version','true','--pipe','false'],input=config_json.encode(),capture_output=True,timeout=8)
+            if result.returncode: raise RuntimeError(result.stderr.decode(errors='replace').strip())
+            return result.stdout,columns
+        snapshot=(self.app.theme_mode,dict(self.app.palette or {}))
+        def done(output,error):
+            if snapshot!=(self.app.theme_mode,self.app.palette or {}):
+                self.refresh(); return
+            if not error:
+                output,columns=output
+                if columns!=self.columns:
+                    self.columns=columns; self.terminal.set_size(columns,9); self.fit()
+            self.render(output,error)
+        self.app.jobs.run('fastfetch',work,done)
+    def render(self,output,error):
+        if error:
+            self.terminal.set_tooltip_text('Fastfetch refresh failed · '+error)
+            return
+        # Drop only the final newline before Fastfetch's closing ANSI sequences.
+        # Otherwise a nine-line output scrolls a nine-row terminal and loses the logo tip.
+        output=re.sub(rb'\r?\n(?=(?:\x1b\[[0-?]*[ -/]*[@-~])*$)',b'',output)
+        output=output.replace(b'\r\n',b'\n').replace(b'\n',b'\r\n')
+        self.output=output
+        self.terminal.reset(True,True)
+        self.app.color_terminal(self.terminal,'fastfetch')
+        self.terminal.feed(b'\x1b[2J\x1b[H'+output+b'\x1b[?25l')
+        self.terminal.set_tooltip_text(None)
+
 class MusicWidget:
     def __init__(self,app,panel):
-        self.app=app; self.player=None; self.players=[]; self.art_url=''; self.props={}
-        self.selector=Gtk.DropDown.new_from_strings(['Automatic'])
-        self.selector.set_size_request(110,-1)
-        self.selector.connect('notify::selected',lambda *_:self.refresh())
-        row=box(False,16)
-        self.art=Gtk.Picture(); self.art.set_size_request(112,112); self.art.set_can_shrink(True); self.art.set_content_fit(Gtk.ContentFit.COVER); self.art.add_css_class('art')
-        row.append(self.art)
-        info=box(spacing=7); info.set_hexpand(True)
+        self.app=app; self.panel=panel; self.player=None; self.players=[]; self.art_url=''; self.props={}
+        panel.root.add_css_class('music-card')
+        self.backdrop=ArtworkBackdrop()
+        overlay=Gtk.Overlay(); panel.set_child(None)
+        overlay.set_child(self.backdrop); overlay.add_overlay(panel.root)
+        panel.set_child(overlay)
+        self.body=box(spacing=5); self.body.set_vexpand(True)
+        self.row=box(False,14)
+        self.art=Gtk.Picture(); self.art.set_can_shrink(True); self.art.set_content_fit(Gtk.ContentFit.COVER)
+        self.art_frame=Gtk.Overlay(); self.art_frame.add_css_class('art')
+        self.art_frame.set_overflow(Gtk.Overflow.HIDDEN)
+        self.art_spacer=Gtk.Box(width_request=48,height_request=48)
+        self.art_frame.set_child(self.art_spacer); self.art_frame.add_overlay(self.art)
+        self.row.append(self.art_frame)
+        info=box(spacing=2); info.set_hexpand(True); info.set_valign(Gtk.Align.CENTER)
         self.title=label('Nothing playing','track'); self.artist=label('Open your favourite music player','subtitle')
-        info.append(self.title); info.append(self.artist)
-        controls=box(False,8)
+        info.append(self.title); info.append(self.artist); self.row.append(info)
+        self.body.append(self.row)
+        self.timeline=box(False,9)
+        self.elapsed=label('','subtitle'); self.remaining=label('','subtitle')
+        self.progress=Gtk.ProgressBar(); self.progress.set_hexpand(True); self.progress.set_valign(Gtk.Align.CENTER)
+        self.timeline.append(self.elapsed); self.timeline.append(self.progress); self.timeline.append(self.remaining)
+        self.body.append(self.timeline)
+        controls=box(False,54); self.controls=controls; controls.set_halign(Gtk.Align.CENTER); controls.set_vexpand(True); controls.set_valign(Gtk.Align.CENTER)
         self.previous=button('',lambda:self.action('Previous'))
-        self.previous.set_icon_name('media-skip-backward-symbolic'); self.previous.set_tooltip_text('Previous track')
-        self.play=button('',lambda:self.action('Pause' if self.props.get('PlaybackStatus')=='Playing' else 'Play'),'primary')
+        self.previous.set_icon_name('media-seek-backward-symbolic'); self.previous.set_tooltip_text('Previous track')
+        self.play=button('',lambda:self.action('Pause' if self.props.get('PlaybackStatus')=='Playing' else 'Play'))
         self.play.set_icon_name('media-playback-start-symbolic'); self.play.set_tooltip_text('Play / pause')
         self.next=button('',lambda:self.action('Next'))
-        self.next.set_icon_name('media-skip-forward-symbolic'); self.next.set_tooltip_text('Next track')
-        for b in (self.previous,self.play,self.next): controls.append(b); b.set_sensitive(False)
-        self.elapsed=label('','subtitle'); controls.append(self.elapsed)
-        info.append(controls)
-        self.progress=Gtk.ProgressBar(); info.append(self.progress)
-        row.append(info); panel.content.append(row)
+        self.next.set_icon_name('media-seek-forward-symbolic'); self.next.set_tooltip_text('Next track')
+        for b in (self.previous,self.play,self.next):
+            controls.append(b); b.set_sensitive(False); b.add_css_class('transport')
+        self.body.append(controls); panel.content.append(self.body)
         self.refresh(); repeat(2,self.refresh)
+    def resize(self,width,height):
+        compact=width<360; large=height>=190
+        self.controls.set_spacing(20 if compact else 54)
+        self.body.reorder_child_after(self.timeline,self.controls if compact else self.row)
+        self.art_frame.set_visible(not compact)
+        size=64 if large else 40
+        self.art_spacer.set_size_request(size,size)
+        self.title.set_max_width_chars(40 if not compact else 18)
+        for b in (self.previous,self.next): b.get_child().set_pixel_size(36 if large else 32)
+        self.play.get_child().set_pixel_size(48 if large else 40)
+        self.elapsed.set_visible(not compact); self.remaining.set_visible(not compact)
+    def apply_art_mode(self):
+        active=self.app.store.data.get('ios_album_art',True) and self.backdrop.texture is not None
+        self.backdrop.enabled=active; self.backdrop.queue_draw()
+        if active: self.panel.root.add_css_class('art-colors')
+        else: self.panel.root.remove_css_class('art-colors')
     def refresh(self):
-        i=self.selector.get_selected()
-        preferred=self.players[i-1] if 0<i<=len(self.players) else ''
+        preferred=self.app.store.data.get('music_player','')
         self.app.jobs.run('music',lambda:media_snapshot(preferred),self.update)
     def update(self,result,error):
-        if error: self.title.set_text('Player connection unavailable'); return
+        if error:
+            self.update(([],None,None),None)
+            self.title.set_text('Player connection unavailable'); return
         players,self.player,props=result
-        if players!=self.players:
-            old=self.players[self.selector.get_selected()-1] if 0<self.selector.get_selected()<=len(self.players) else ''
-            self.players=players
-            self.selector.set_model(Gtk.StringList.new(['Automatic']+[p.removeprefix('org.mpris.MediaPlayer2.') for p in players]))
-            self.selector.set_selected(players.index(old)+1 if old in players else 0)
+        self.players=players
         props=props or {}; self.props=props
         meta=props.get('Metadata',{})
         self.title.set_text(meta.get('xesam:title','Nothing playing'))
@@ -251,125 +300,31 @@ class MusicWidget:
         self.next.set_sensitive(control and props.get('CanGoNext',False))
         length=max(0,meta.get('mpris:length',0)); pos=max(0,props.get('Position',0))
         self.progress.set_fraction(min(1,pos/length) if length else 0)
-        self.elapsed.set_text(f'{int(pos/60_000_000)}:{int(pos/1_000_000)%60:02d} / {int(length/60_000_000)}:{int(length/1_000_000)%60:02d}' if length else '')
+        self.elapsed.set_text(f'{int(pos/60_000_000)}:{int(pos/1_000_000)%60:02d}' if length else '')
+        left=max(0,length-pos)
+        self.remaining.set_text(f'-{int(left/60_000_000)}:{int(left/1_000_000)%60:02d}' if length else '')
         url=meta.get('mpris:artUrl','') if meta.get('xesam:title') else ''
         if url!=self.art_url:
             self.art_url=url; self.art.set_paintable(None)
+            self.backdrop.texture=None; self.apply_art_mode()
             if url:
                 self.app.jobs.run('art-'+str(hash(url)),lambda:artwork_bytes(url),lambda data,err:self.set_art(url,data,err))
     def set_art(self,url,data,error):
         if url!=self.art_url or error: return
-        try: self.art.set_paintable(Gdk.Texture.new_from_bytes(GLib.Bytes.new(data)))
+        try:
+            texture=Gdk.Texture.new_from_bytes(GLib.Bytes.new(data))
+            self.art.set_paintable(texture); self.backdrop.texture=texture
+            self.apply_art_mode()
         except GLib.Error: pass
     def action(self,method):
         if self.player:
             player=self.player
             self.app.jobs.run('music-action',lambda:media_action(player,method),lambda v,e:self.refresh())
 
-class WeatherWidget:
-    def __init__(self,app,panel):
-        self.app=app; self.panel=panel; self.generation=0; self.picker=None
-        self.location=app.store.data.get('location')
-        if not isinstance(self.location,dict) or not all(k in self.location for k in ('name','latitude','longitude')): self.location=None
-        self.portal=Location(self.located,self.location_status)
-        self.name=label('Your local forecast','subtitle'); panel.content.append(self.name)
-        self.current=label('—°','big'); panel.content.append(self.current)
-        self.description=label('Choose a location to get started','subtitle'); panel.content.append(self.description)
-        self.forecast=label('','subtitle',True); panel.content.append(self.forecast)
-        self.status=label('','subtitle',True); panel.content.append(self.status)
-        row=box(False,5)
-        row.append(button('Choose location',self.choose))
-        row.append(button('↻',self.retry)); panel.content.append(row)
-        attribution=Gtk.LinkButton(uri='https://open-meteo.com/',label='Open-Meteo · GeoNames'); attribution.add_css_class('flat'); panel.content.append(attribution)
-        self.cache=read_json(STATE/'weather.json',{})
-        if not isinstance(self.cache,dict): self.cache={}
-        if self.location and self.cache.get('location')==self.location: self.render(self.cache.get('data',{}),self.cache.get('fetched',0))
-        self.refresh(); repeat(900,self.refresh)
-        if app.store.data.get('automatic_location',True): GLib.idle_add(self.auto_start)
-    def location_status(self,text,detail=''):
-        if detail: print('Location portal:',detail,flush=True)
-        if 'permission was not granted' in detail:
-            self.app.store.data['automatic_location']=False
-            self.app.store.save()
-        self.status.set_text(text); self.status.set_tooltip_text(detail or text)
-    def auto_start(self):
-        self.app.store.data['automatic_location']=True; self.app.store.save()
-        self.portal.start(); return False
-    def located(self,location):
-        self.set_location(location,True)
-    def set_location(self,location,automatic=False):
-        if not automatic: self.portal.close()
-        self.generation+=1
-        self.location=location
-        self.app.store.data.update(location=location,automatic_location=automatic)
-        self.app.store.save()
-        self.current.set_text('—°'); self.description.set_text('Loading forecast…'); self.forecast.set_text('')
-        if self.picker: self.picker.close(); self.picker=None
-        self.refresh()
-    def retry(self):
-        self.refresh()
-        if self.app.store.data.get('automatic_location',True): self.portal.start()
-    def refresh(self):
-        if not self.location: return
-        location=dict(self.location); gen=self.generation
-        self.name.set_text(location['name'])
-        self.app.jobs.run('weather-'+str(gen),lambda:weather_for(location),lambda data,error:self.received(gen,location,data,error))
-    def received(self,gen,location,data,error):
-        if gen!=self.generation: return
-        if error:
-            age=self.cache.get('fetched',0) if self.cache.get('location')==location else 0
-            self.status.set_text('Offline · '+self.updated_text(age) if age else 'Forecast unavailable · Retry')
-            self.status.set_tooltip_text(error); return
-        fetched=time.time()
-        self.cache={'location':location,'data':data,'fetched':fetched}
-        write_json(STATE/'weather.json',self.cache)
-        self.render(data,fetched)
-    def updated_text(self,stamp):
-        if not stamp: return 'No cached forecast'
-        return 'Updated '+datetime.fromtimestamp(stamp).astimezone().strftime('%d %b, %H:%M')
-    def render(self,data,fetched):
-        try:
-            current=data['current']; daily=data['daily']
-            icon,description=conditions(current['weather_code'])
-            self.name.set_text(self.location['name'])
-            self.current.set_text(f"{icon}  {current['temperature_2m']:.0f}°")
-            self.description.set_text(f"{description} · Humidity {current['relative_humidity_2m']}%")
-            self.forecast.set_text('   '.join(f"{datetime.fromisoformat(d).strftime('%a')} {hi:.0f}°/{lo:.0f}°" for d,hi,lo in zip(daily['time'][1:4],daily['temperature_2m_max'][1:4],daily['temperature_2m_min'][1:4])))
-            self.status.set_text(self.updated_text(fetched))
-        except (KeyError,TypeError,ValueError): self.status.set_text('Forecast data unavailable · Retry')
-    def choose(self):
-        if self.picker: self.picker.present(); return
-        win=Gtk.Window(application=self.app,title='Choose weather location',default_width=420,default_height=370)
-        self.picker=win
-        win.connect('close-request',lambda *_:setattr(self,'picker',None) or False)
-        root=box(spacing=12); root.add_css_class('glass'); win.set_child(root)
-        root.append(label('Choose your weather location','track'))
-        root.append(label('Search a city or area. Your selection stays on this device.','subtitle',True))
-        entry=Gtk.SearchEntry(placeholder_text='Singapore, Kent Ridge, Tokyo…'); root.append(entry)
-        message=label('Type a place and press Enter','subtitle',True); root.append(message)
-        results=box(spacing=6); scroll=Gtk.ScrolledWindow(vexpand=True); scroll.set_child(results); root.append(scroll)
-        search_id=[0]
-        def search(*_):
-            search_id[0]+=1; token=search_id[0]; clear(results); message.set_text('Searching…')
-            def done(places,error):
-                if token!=search_id[0] or self.picker is not win: return
-                message.set_text('Search unavailable · Try again' if error else ('Select a matching place' if places else 'No matches · Try a nearby city'))
-                for p in places or []:
-                    name=', '.join(dict.fromkeys(x for x in (p['name'],p.get('admin1'),p.get('country')) if x))
-                    loc={'name':p['name'],'latitude':p['latitude'],'longitude':p['longitude']}
-                    b=button(name,lambda loc=loc:self.set_location(loc)); b.set_tooltip_text(name); results.append(b)
-            query=entry.get_text()
-            self.app.jobs.run('place-'+str(token),lambda:search_places(query),done)
-        entry.connect('activate',search)
-        actions=box(False,8); actions.append(button('Search',search)); actions.append(button('Use my location',lambda:(win.close(),self.auto_start())))
-        root.append(actions)
-        root.append(label('Automatic mode requests approximate location. Coordinates are sent to Open-Meteo for weather.','subtitle',True))
-        win.present()
-
 class Dashboard(Gtk.Application):
     def __init__(self):
         super().__init__(application_id='io.github.ecwk.GlassDashboard',flags=Gio.ApplicationFlags.HANDLES_COMMAND_LINE)
-        self.ready=False; self.editing=False; self.panels={}; self.jobs=Jobs(); self.store=Store(); self.spectrum=Spectrum()
+        self.ready=False; self.panels={}; self.jobs=Jobs(); self.store=Store(); self.spectrum=Spectrum()
         self.connect('activate',self.activate)
         self.connect('command-line',self.command_line)
         self.connect('shutdown',self.shutdown)
@@ -377,11 +332,16 @@ class Dashboard(Gtk.Application):
         args=cmd.get_arguments()[1:]
         if '--quit' in args: self.quit(); return 0
         self.activate(self)
-        if '--edit' in args: self.toggle_edit()
+        if '--control' in args:
+            try:
+                request=json.loads(args[args.index('--control')+1])
+                self.control(request)
+                cmd.print_literal(json.dumps(self.snapshot())+'\n')
+                return 0
+            except (ValueError,KeyError,IndexError,TypeError,OSError) as exc:
+                cmd.printerr_literal(str(exc)+'\n'); return 1
         if '--reset-layout' in args: self.reset_layout()
         if '--restart-terminal' in args: self.terminal.restart()
-        if '--restart-bluetooth' in args: self.bluetooth.restart()
-        if '--export-layout' in args: self.export_layout()
         if '--smoke-test' in args:
             GLib.timeout_add_seconds(8,lambda:(self.quit(),False)[1])
         return 0
@@ -391,21 +351,29 @@ class Dashboard(Gtk.Application):
             raise RuntimeError('Wayland layer-shell unavailable; use the included launcher in your Hyprland session')
         self.ready=True
         STATE.mkdir(parents=True,exist_ok=True)
+        self.theme_mode=read_appearance(self.store.data.get('theme_mode','full'))
+        if self.theme_mode not in MODES: self.theme_mode='full'
+        self.palette=read_palette()
+        self.theme_monitor=None; self.theme_reload_source=0
         provider=Gtk.CssProvider(); provider.load_from_path(str(ROOT/'style.css'))
         Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        self.theme_provider=Gtk.CssProvider()
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),self.theme_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION+1)
+        self.theme_provider.load_from_string(css(self.theme_mode,self.palette))
+        self.music_provider=Gtk.CssProvider(); self.music_provider.load_from_path(str(ROOT/'music.css'))
+        Gtk.StyleContext.add_provider_for_display(Gdk.Display.get_default(),self.music_provider,Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION+2)
         settings=Gtk.Settings.get_default(); settings.set_property('gtk-interface-color-scheme',Gtk.InterfaceColorScheme.DARK)
         self.monitors=Gdk.Display.get_default().get_monitors()
         self.monitors.connect('items-changed',lambda *_:self.monitor_changed())
         self.select_monitor()
         for key in TITLES: self.panels[key]=Panel(self,key)
-        self.build_clock(); self.build_calendar()
         self.music=MusicWidget(self,self.panels['music'])
         self.build_spectrum()
         self.terminal=TerminalWidget(self,self.panels['btop'])
-        self.weather=WeatherWidget(self,self.panels['weather'])
-        self.bluetooth=TerminalWidget(self,self.panels['bluetooth'],'bluetui')
-        self.system=TerminalWidget(self,self.panels['system'],'fastfetch')
-        self.build_controls()
+        self.system=FastfetchWidget(self,self.panels['system'])
+        self.apply_theme()
+        self.watch_theme()
+        self.theme_retry=repeat(10,self.watch_theme)
         for panel in self.panels.values(): panel.place()
         GLibUnix.signal_add(GLib.PRIORITY_DEFAULT,signal.SIGTERM,lambda:(self.quit(),False)[1])
     def select_monitor(self):
@@ -428,57 +396,22 @@ class Dashboard(Gtk.Application):
         if not self.select_monitor():
             for p in self.panels.values(): p.set_visible(False)
             return
+        if hasattr(self,'system'): self.system.fit()
         for panel in self.panels.values(): panel.place()
-        if hasattr(self,'monitor_choice'): self.update_monitor_choices()
-        self.sync_visibility()
     def save_layout(self):
         if not hasattr(self,'layout'): return
         self.store.data['layouts'][self.monitor_key]=self.layout
         self.store.save()
-    def toggle_edit(self):
-        self.editing=not self.editing
-        for p in self.panels.values(): p.edit(self.editing)
-        self.edit_button.set_icon_name('object-select-symbolic' if self.editing else 'document-edit-symbolic')
-        self.edit_button.set_tooltip_text('Finish editing' if self.editing else 'Edit layout (Super + Shift + D)')
-        if not self.editing: self.save_layout()
-    def reset_layout(self):
-        self.layout=default_layout(self.width,self.height)
+    def select_layout(self,name):
+        if name not in PRESETS: raise ValueError('Unknown layout preset')
+        selections=self.store.data.setdefault('layout_presets',{})
+        selections[self.monitor_key]=name
+        self.layout=self.store.layout(self.monitor_key,self.width,self.height)
+        self.system.fit()
         for p in self.panels.values(): p.place()
         self.save_layout()
-        self.sync_visibility()
-    def export_layout(self):
-        layout={key:{name:(bool(value) if name=='visible' else round(value*(1440/self.width if name in ('x','w') else 900/self.height))) for name,value in rect.items()} for key,rect in self.layout.items()}
-        try:
-            write_json(ROOT/'data/layout.json',layout)
-            self.edit_button.set_tooltip_text('Saved arrangement to data/layout.json in your Hyprland repository')
-        except OSError as exc:
-            self.edit_button.set_tooltip_text('Could not save layout: '+str(exc))
-    def sync_visibility(self):
-        if not hasattr(self,'visibility_checks'): return
-        self.updating_visibility=True
-        for key,check in self.visibility_checks.items(): check.set_active(self.layout[key]['visible'])
-        self.updating_visibility=False
-    def build_clock(self):
-        panel=self.panels['clock']
-        self.clock=label('','clock'); self.date=label('','subtitle'); self.term=label('','accent',True); self.year=label('','subtitle')
-        for w in (self.clock,self.date,self.term,self.year): panel.content.append(w)
-        def tick():
-            now=datetime.now(ZoneInfo('Asia/Singapore'))
-            self.clock.set_text(now.strftime('%H:%M'))
-            self.date.set_text(now.strftime('%A, %d %B')+' · SGT')
-            phase,year=academic(now.date()); self.term.set_text(phase); self.year.set_text(year)
-        tick(); repeat(10,tick)
-    def build_calendar(self):
-        panel=self.panels['calendar']
-        cal=Gtk.Calendar(); cal.set_hexpand(True); cal.set_vexpand(True)
-        panel.content.append(cal)
-        self.calendar_status=label('','subtitle',True); panel.content.append(self.calendar_status)
-        def selected(*_):
-            dt=cal.get_date()
-            d=datetime(dt.get_year(),dt.get_month(),dt.get_day_of_month()).date()
-            self.calendar_status.set_text(academic(d)[0])
-        cal.connect('day-selected',selected)
-        selected()
+    def reset_layout(self):
+        self.select_layout('balanced-center')
     def build_spectrum(self):
         panel=self.panels['visualiser']
         self.canvas=Gtk.DrawingArea(vexpand=True,hexpand=True)
@@ -488,7 +421,9 @@ class Dashboard(Gtk.Application):
             for i,v in enumerate(values):
                 bar=max(2,v*h)
                 shade=.65+.25*v
-                cr.set_source_rgba(shade,shade,shade,.40+.55*v)
+                if self.theme_mode!='original' and self.palette:
+                    c=colour(self.palette['accent']); cr.set_source_rgba(c.red,c.green,c.blue,.40+.55*v)
+                else: cr.set_source_rgba(shade,shade,shade,.40+.55*v)
                 cr.rectangle(i*step,h-bar,max(2,step-4),bar); cr.fill()
         self.canvas.set_draw_func(draw)
         panel.content.append(self.canvas)
@@ -507,56 +442,92 @@ class Dashboard(Gtk.Application):
             else: self.canvas.set_tooltip_text(None)
             return True
         GLib.timeout_add(50,tick)
-    def build_controls(self):
-        panel=self.panels['controls']
-        row=box(False,8)
-        self.edit_button=Gtk.Button(icon_name='document-edit-symbolic')
-        self.edit_button.add_css_class('flat')
-        self.edit_button.set_tooltip_text('Edit layout (Super + Shift + D)')
-        self.edit_button.connect('clicked',lambda *_:self.toggle_edit())
-        row.append(self.edit_button)
-        menu=Gtk.MenuButton(icon_name='emblem-system-symbolic')
-        menu.add_css_class('flat'); menu.set_tooltip_text('Dashboard settings'); row.append(menu)
-        panel.content.append(row)
-        popover=Gtk.Popover(); menu.set_popover(popover); contents=box(spacing=10); popover.set_child(contents)
-        contents.append(label('Music player','heading'))
-        contents.append(self.music.selector)
-        contents.append(label('Display','heading'))
-        self.monitor_choice=Gtk.DropDown(); self.update_monitor_choices()
-        self.monitor_choice.connect('notify::selected',self.chosen_monitor); contents.append(self.monitor_choice)
-        contents.append(label('Visible widgets','heading'))
-        self.visibility_checks={}
-        self.updating_visibility=False
-        for key in TITLES:
-            if key=='controls': continue
-            cb=Gtk.CheckButton(label=TITLES[key].title(),active=self.layout[key]['visible'])
-            self.visibility_checks[key]=cb
-            def toggle(check,key=key):
-                if self.updating_visibility: return
-                self.layout[key]['visible']=check.get_active(); self.panels[key].place(); self.save_layout()
-            cb.connect('toggled',toggle); contents.append(cb)
-        contents.append(button('Save layout to repo',self.export_layout))
-        contents.append(button('Reset layout',self.reset_layout))
-        contents.append(button('Restart dashboard',lambda:subprocess.Popen(['systemctl','--user','restart','glass-dashboard.service'])))
-    def update_monitor_choices(self):
-        self.updating_monitors=True
-        self.monitor_names=[self.monitors.get_item(i).get_connector() or 'Display' for i in range(self.monitors.get_n_items())]
-        self.monitor_choice.set_model(Gtk.StringList.new(self.monitor_names))
-        self.monitor_choice.set_selected(self.monitor_names.index(self.monitor_key) if self.monitor_key in self.monitor_names else 0)
-        self.updating_monitors=False
-    def chosen_monitor(self,*_):
-        if self.updating_monitors: return
-        i=self.monitor_choice.get_selected()
-        if i>=len(self.monitor_names): return
-        self.store.data['monitor']=self.monitor_names[i]; self.monitor_changed()
+    def btop_themed(self):
+        return self.theme_mode=='full' and bool(self.palette) and bool(self.store.data.get('theme_btop',False))
+    def color_terminal(self,terminal,program):
+        fg,palette=terminal_colors(self.theme_mode,self.palette,program,self.btop_themed())
+        terminal.set_colors(colour(fg),colour('rgba(0,0,0,0)'),[colour(c) for c in palette])
+    def apply_theme(self):
+        self.theme_provider.load_from_string(css(self.theme_mode,self.palette))
+        light=self.theme_mode=='full' and read_json(THEME_FILE,{}).get('mode')=='light'
+        Gtk.Settings.get_default().set_property('gtk-interface-color-scheme',Gtk.InterfaceColorScheme.LIGHT if light else Gtk.InterfaceColorScheme.DARK)
+        self.color_terminal(self.terminal.terminal,'btop')
+        root=self.panels['btop'].root
+        if self.theme_mode=='full' and not self.store.data.get('theme_btop_background',self.store.data.get('theme_btop',False)): root.add_css_class('btop-original')
+        else: root.remove_css_class('btop-original')
+        signature=btop_theme(self.palette) if self.btop_themed() else None
+        if hasattr(self,'btop_theme_signature') and signature!=self.btop_theme_signature:
+            self.terminal.restart()
+        self.btop_theme_signature=signature
+        self.system.refresh(); self.canvas.queue_draw()
+    def watch_theme(self):
+        if self.theme_monitor is not None: return
+        if not THEME_FILE.parent.is_dir(): return
+        try:
+            self.theme_monitor=Gio.File.new_for_path(str(THEME_FILE.parent)).monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES,None)
+            self.theme_monitor.connect('changed',self.theme_changed)
+            self.reload_theme()
+        except GLib.Error: self.theme_monitor=None
+    def theme_changed(self,monitor,file,other,event):
+        if not any(f and f.get_basename() in ('current.json','appearance.json') for f in (file,other)): return
+        if self.theme_reload_source: GLib.source_remove(self.theme_reload_source)
+        self.theme_reload_source=GLib.timeout_add(150,self.reload_theme)
+    def reload_theme(self):
+        self.theme_reload_source=0
+        palette=read_palette()
+        # Keep the last valid colors across transient invalid/incomplete publications.
+        mode=read_appearance(self.theme_mode)
+        if mode!=self.theme_mode or (palette is not None and palette!=self.palette):
+            self.theme_mode=mode
+            if palette is not None: self.palette=palette
+            self.apply_theme()
+        return False
+    def snapshot(self):
+        return dict(layout=self.store.data.get('layout_presets',{}).get(self.monitor_key,'balanced-center'),
+                    layouts=[dict(id=k,title=v['title']) for k,v in PRESETS.items()],theme=self.theme_mode,themeAvailable=bool(self.palette),
+                    iosAlbumArt=bool(self.store.data.get('ios_album_art',True)),
+                    styleTui=bool(self.store.data.get('theme_btop',False)),
+                    styleBackground=bool(self.store.data.get('theme_btop_background',self.store.data.get('theme_btop',False))),
+                    monitor=self.monitor_key,monitors=[self.monitors.get_item(i).get_connector() for i in range(self.monitors.get_n_items())],
+                    player=self.store.data.get('music_player',''),players=self.music.players,
+                    widgets=[dict(id=k,title=TITLES[k].title(),visible=v['visible']) for k,v in self.layout.items()])
+    def control(self,request):
+        action=request.get('action','status'); value=request.get('value')
+        if action=='status': return
+        if action=='layout': self.select_layout(value)
+        elif action=='theme':
+            if value not in MODES: raise ValueError('Unknown theme mode')
+            command([str(Path.home()/'.local/bin/walltheme'),'settings','--style',value])
+            self.reload_theme()
+        elif action in ('styleTui','styleBackground'):
+            if self.theme_mode!='full': raise ValueError('Btop styling requires Full theme')
+            if not isinstance(value,bool): raise ValueError('Expected boolean')
+            self.store.data['theme_btop' if action=='styleTui' else 'theme_btop_background']=value; self.apply_theme()
+        elif action=='iosAlbumArt':
+            if not isinstance(value,bool): raise ValueError('Expected boolean')
+            self.store.data['ios_album_art']=value; self.music.apply_art_mode()
+        elif action=='visibility':
+            key=request['widget']
+            if key not in self.panels or not isinstance(value,bool): raise ValueError('Invalid widget visibility')
+            self.layout[key]['visible']=value; self.panels[key].place()
+        elif action=='monitor':
+            if value not in self.snapshot()['monitors']: raise ValueError('Display is not connected')
+            self.store.data['monitor']=value; self.monitor_changed()
+        elif action=='player':
+            if value and value not in self.music.players: raise ValueError('Player is not available')
+            self.store.data['music_player']=value; self.music.refresh()
+        elif action=='reset': self.reset_layout()
+        elif action=='restartTerminal': self.terminal.restart()
+        else: raise ValueError('Unknown dashboard action')
+        self.save_layout()
     def shutdown(self,*_):
         self.jobs.closed=True
+        if getattr(self,'theme_monitor',None): self.theme_monitor.cancel()
+        for source in ('theme_reload_source','theme_retry'):
+            if getattr(self,source,0): GLib.source_remove(getattr(self,source))
         if self.ready:
             self.save_layout()
             if hasattr(self,'terminal'): self.terminal.stop()
-            if hasattr(self,'bluetooth'): self.bluetooth.stop()
-            if hasattr(self,'system'): self.system.stop()
-            if hasattr(self,'weather'): self.weather.portal.close()
             self.spectrum.stop()
 
 if __name__=='__main__':

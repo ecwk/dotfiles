@@ -53,11 +53,26 @@
     {
       "type": "gpu",
       "key": "gpu",
-      "format": "{name}"
+      "format": "{name}",
+      "hideType": "integrated",
+      "detectionMethod": "pci"
+    },
+    {
+      "type": "custom",
+      "key": "gpu",
+      "format": "Dedicated GPU unavailable",
+      "condition": {
+        "succeeded": false
+      }
     },
     {
       "type": "memory",
       "key": "ram",
+      "format": "{used} / {total} ({percentage})"
+    },
+    {
+      "type": "swap",
+      "key": "swap",
       "format": "{used} / {total} ({percentage})"
     },
     {

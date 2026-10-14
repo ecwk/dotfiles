@@ -6,7 +6,8 @@ StartLimitIntervalSec=60
 StartLimitBurst=5
 
 [Service]
-Type=simple
+Type=dbus
+BusName=io.github.ecwk.GlassDashboard
 ExecStart=%h/.local/bin/glass-dashboard
 Restart=on-failure
 RestartSec=3

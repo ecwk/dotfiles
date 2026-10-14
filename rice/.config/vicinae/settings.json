@@ -10,6 +10,11 @@
 
 {
    "$schema": "https://vicinae.com/schemas/config.json",
+   "theme": {
+      "dark": {
+         "name": "vicinae-dark"
+      }
+   },
    "providers": {
       "clipboard": {
          "preferences": {

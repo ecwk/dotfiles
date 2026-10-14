@@ -1,0 +1,35 @@
+{
+  "name": "glass-dashboard",
+  "title": "Glass Dashboard",
+  "description": "Choose fixed layouts and configure desktop dashboard widgets",
+  "icon": "icon.svg",
+  "author": "ecwk",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "dashboard",
+      "title": "Dashboard Controls",
+      "description": "Fixed layouts, themes, btop styling, widgets and displays",
+      "mode": "view"
+    },
+    {
+      "name": "theme-settings",
+      "title": "Theme Settings",
+      "description": "Shared dashboard and Waybar colors, accents, defaults and light mode",
+      "mode": "view"
+    }
+  ],
+  "scripts": {
+    "build": "vici build",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vicinae/api": "0.20.5",
+    "react": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.10.1",
+    "@types/react": "19.0.10",
+    "typescript": "5.9.3"
+  }
+}
