@@ -1,0 +1,1 @@
+ecwk ALL=(root) NOPASSWD: /usr/bin/impala

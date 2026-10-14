@@ -1,0 +1,6 @@
+#!/bin/bash
+if pgrep -x waybar; then
+  pkill -x waybar
+else
+  setsid uwsm app -- waybar
+fi

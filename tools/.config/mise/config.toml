@@ -1,0 +1,24 @@
+[tools]
+"aqua:aws/aws-sam-cli" = "latest"
+"aqua:pnpm" = "latest"
+"aqua:tombi-toml/tombi" = "latest"
+aws-sam = { version = "latest", symlink_bins = "true" }
+bun = "latest"
+deno = "latest"
+java = "lts"
+node = "lts"
+"npm:@biomejs/biome" = "latest"
+"npm:@openai/codex" = "latest"
+"npm:@stripe/cli" = "latest"
+"npm:eas-cli" = "latest"
+"npm:prettier" = "latest"
+"npm:sql-language-server" = "latest"
+"npm:tree-sitter-cli" = "latest"
+"npm:tsx" = "latest"
+"npm:typescript" = "latest"
+"npm:yarn" = "latest"
+python = "latest"
+usage = "latest"
+
+[settings]
+python_compile = true

@@ -1,0 +1,17 @@
+[Unit]
+Description=Glass desktop dashboard
+PartOf=graphical-session.target
+After=graphical-session.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/glass-dashboard
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+KillMode=control-group
+
+[Install]
+WantedBy=graphical-session.target

@@ -1,0 +1,109 @@
+@import "./colors.css";
+@define-color background @neutral-900;
+@define-color foreground @neutral-300;
+@define-color primary @indigo-300;
+@define-color secondary @indigo-600;
+@define-color muted @gray-500;
+
+* {
+    font-family: "JetBrainsMono Nerd Font";
+	font-size: 12px;
+}
+
+window#waybar {
+	   color: @foreground;
+	   background-color: alpha(@background, 0.8);
+	   transition-property: background-color;
+	transition-duration: 0.5s;
+}
+
+/* Workspaces */
+#workspaces button {
+	color: @foreground;
+	padding: 0 5px;
+	/* Avoid rounded borders under each button name */
+	border: none;
+	border-radius: 0;
+}
+
+
+#workspaces button:hover {
+	color: white;
+}
+
+#workspaces button.active {
+	color: white;
+	background-color: alpha(@gray-600, 0.8);
+	box-shadow: inset 0 -3px @gray-100;
+}
+
+/* Privacy */
+#privacy-item {
+	padding: 0 12px;
+	color: @amber-400;
+}
+
+/* Bluetooth */
+#bluetooth {
+    /* color: @blue-400; */
+    font-size: 16px;
+    padding-right: 12px;
+	padding-left: 11px;
+}
+#bluetooth.off,
+#blueooth.disabled {
+    color: @muted;
+}
+
+/* Network */
+#network {
+    /* color: @green-400; */
+    padding-left: 12px;
+    padding-right: 16px;
+}
+#network.disconnected,
+#network.disabled {
+	color: @muted;
+}
+
+/* Audio */
+#pulseaudio {
+	padding-left: 11px;
+	padding-right: 12px;
+}
+#pulseaudio.muted {
+	color: @muted;
+}
+
+/* Battery */
+#battery {
+	padding-left: 12px;
+	padding-right: 12px;
+}
+
+/* Power Profiles */
+#power-profiles-daemon {
+	padding-left: 12px;
+	padding-right: 12px;
+}
+
+
+#temperature,
+#backlight,
+#tray,
+#mpd {
+	padding: 0 10px;
+}
+
+#tray {
+	/* background-color: #2980b9; */
+}
+
+#tray > .passive {
+	-gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+	-gtk-icon-effect: highlight;
+	background-color: #eb4d4b;
+}

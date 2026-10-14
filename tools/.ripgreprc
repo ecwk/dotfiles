@@ -1,0 +1,3 @@
+# --hidden
+--ignore-case
+--glob=!*.class

@@ -1,0 +1,29 @@
+@use "colors" as *;
+
+$background: $neutral-900;
+$foreground: $neutral-300;
+$primary: $indigo-300;
+$secondary: $indigo-600;
+$muted: $gray-500;
+
+* {
+    font-family: "JetBrainsMono Nerd Font";
+	font-size: 12px;
+}
+
+window.Volume box {
+	color: $foreground;
+    background-color: rgba($background, 0.8);
+
+	border-radius: 12px;
+	padding: 20px;
+	margin-bottom: 40px;
+
+    progressbar trough {
+      min-height: 6px;
+    }
+
+    progressbar trough progress {
+        background-color: $muted;
+    }
+}

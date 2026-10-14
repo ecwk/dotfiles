@@ -1,0 +1,9 @@
+#!/bin/sh
+# Force native Wayland and load layer-shell before GTK opens the display.
+export GDK_BACKEND=wayland
+# GTK 4.24 advertises an empty native blur region, overriding Hyprland layer rules.
+# Let the compositor apply our scoped blur rule instead (only this process).
+export GDK_WAYLAND_DISABLE="${GDK_WAYLAND_DISABLE:+$GDK_WAYLAND_DISABLE,}ext_background_effect_manager_v1"
+export LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
+DASHBOARD_DIR=$(dirname "$(readlink -f "$0")")
+exec /usr/bin/python "$DASHBOARD_DIR/app.py" "$@"

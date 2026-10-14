@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Glass Dashboard
+Comment=Edit your desktop widgets
+Exec=glass-dashboard --edit
+Icon=preferences-desktop-display
+Terminal=false
+Categories=Utility;
+StartupNotify=false

@@ -1,0 +1,20 @@
+# Local software and runtime state (not configuration)
+**/node_modules/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/@girs/
+**/*.backup*
+**/*.before-*
+**/*.bak
+**/.DS_Store
+rice/.local/share/walltheme/lib/tools/matugen
+rice/.local/share/walltheme/index.json
+rice/.local/share/walltheme/palette.lock
+rice/.local/share/walltheme/matugen.toml
+rice/.local/share/walltheme/palettes/
+rice/.local/share/walltheme/swatches/
+# Future machine-local overrides and secrets
+**/.env
+**/.env.*
+**/?*.local

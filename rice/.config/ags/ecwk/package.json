@@ -1,0 +1,12 @@
+{
+  "dependencies": {
+    "ags": "*",
+    "clsx": "^2.1.1",
+    "gnim": "*",
+    "rxjs": "^7.8.2"
+  },
+  "prettier": {
+    "semi": false,
+    "tabWidth": 2
+  }
+}

@@ -1,0 +1,28 @@
+BasedOnStyle: Google
+Language: Java
+
+IndentWidth: 4
+# ContinuationIndentWidth: 8
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+ColumnLimit: 100
+BreakBeforeCloseBracketFunction: true
+BinPackArguments: false
+
+# # Code Structure & Alignment
+# AllowShortBlocksOnASingleLine: false
+# AllowShortFunctionsOnASingleLine: Empty
+# AllowShortIfStatementsOnASingleLine: false
+# AllowShortLoopsOnASingleLine: false
+#
+# # Spaces and Padding
+# SpacesBeforeTrailingComments: 2
+# SpaceAfterCStyleCast: true
+# SpaceBeforeAssignmentOperators: true
+# SpaceBeforeParens: ControlStatements
+#
+# # Line Breaks & Wrapping
+# MaxEmptyLinesToKeep: 1
+# KeepEmptyLinesAtTheStartOfBlocks: false

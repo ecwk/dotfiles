@@ -1,0 +1,75 @@
+{
+  "$schema": "https://raw.githubusercontent.com/fastfetch-cli/fastfetch/2.69.0/doc/json_schema.json",
+  "logo": {
+    "source": "arch_small",
+    "color": {
+      "1": "#89b4fa",
+      "2": "#89b4fa"
+    },
+    "padding": {
+      "right": 2
+    }
+  },
+  "display": {
+    "separator": "  ",
+    "key": {
+      "width": 7
+    },
+    "color": {
+      "keys": "#89b4fa",
+      "output": "default",
+      "separator": "default"
+    },
+    "percent": {
+      "type": [
+        "num"
+      ],
+      "ndigits": 0
+    },
+    "hideCursor": true,
+    "disableLinewrap": true
+  },
+  "modules": [
+    {
+      "type": "os",
+      "key": "os",
+      "format": "{pretty-name}"
+    },
+    {
+      "type": "wm",
+      "key": "wm",
+      "format": "{pretty-name} {version}"
+    },
+    {
+      "type": "uptime",
+      "key": "up",
+      "format": "{days}d {hours}h {minutes}m"
+    },
+    {
+      "type": "cpu",
+      "key": "cpu",
+      "format": "{name}"
+    },
+    {
+      "type": "gpu",
+      "key": "gpu",
+      "format": "{name}"
+    },
+    {
+      "type": "memory",
+      "key": "ram",
+      "format": "{used} / {total} ({percentage})"
+    },
+    {
+      "type": "disk",
+      "key": "disk",
+      "folders": "/",
+      "format": "{size-used} / {size-total} ({size-percentage})"
+    },
+    {
+      "type": "battery",
+      "key": "bat",
+      "format": "{capacity}"
+    }
+  ]
+}

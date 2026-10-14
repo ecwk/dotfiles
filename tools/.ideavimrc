@@ -1,0 +1,4 @@
+set clipboard+=unnamedplus
+nnoremap <C-/> :action CommentByLineComment<CR>k
+set commentary
+nnoremap <leader>dd :action ShowErrorDescription<CR>

@@ -1,0 +1,9 @@
+# Keep nested README/source files; only ignore development and backup files.
+(^|/)\.git$
+(^|/)node_modules$
+(^|/)__pycache__$
+(^|/)@girs$
+\.py[co]$
+\.backup
+\.before-
+\.bak$

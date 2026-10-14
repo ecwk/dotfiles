@@ -1,0 +1,14 @@
+# See https://wiki.hyprland.org/Configuring/Environment-variables/
+
+export XCURSOR_SIZE=24
+
+# Enable Nvidia
+export LIBVA_DRIVER_NAME=nvidia
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+
+# Enable VA-API Hardware Video Acceleration
+export NVD_BACKEND=direct
+
+# Prevent Electron/Chromium apps from flickering
+export ELECTRON_OZONE_PLATFORM_HINT=auto
+

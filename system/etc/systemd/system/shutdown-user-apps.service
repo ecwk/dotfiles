@@ -1,0 +1,11 @@
+[Unit]
+Description=Gracefully shutdown certain user applications
+DefaultDependencies=no
+Before=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/home/ecwk/.config/hypr/hyprland/scripts/shutdown-user-apps.sh
+
+[Install]
+WantedBy=shutdown.target

@@ -1,0 +1,8 @@
+.config/systemd/user/default.target.wants/pipewire-pulse.service -> /usr/lib/systemd/user/pipewire-pulse.service
+.config/systemd/user/glass-dashboard.service -> /home/ecwk/.config/hypr/dashboard/integration/glass-dashboard.service
+.config/systemd/user/graphical-session.target.wants/glass-dashboard.service -> /home/ecwk/.config/hypr/dashboard/integration/glass-dashboard.service
+.config/systemd/user/graphical-session.target.wants/hyprpaper.service -> /home/ecwk/.config/systemd/user/hyprpaper.service [broken]
+.config/systemd/user/graphical-session.target.wants/swaync.service -> /usr/lib/systemd/user/swaync.service
+.config/systemd/user/graphical-session.target.wants/waybar.service -> /usr/lib/systemd/user/waybar.service
+.config/systemd/user/mako.service -> /dev/null
+.config/systemd/user/sockets.target.wants/pipewire-pulse.socket -> /usr/lib/systemd/user/pipewire-pulse.socket
