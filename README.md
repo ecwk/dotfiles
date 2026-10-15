@@ -13,7 +13,7 @@ Canonical Linux configuration, organized as GNU Stow packages. The working check
 | `machine` | ASUS ROG/NVIDIA user preferences and XDG home-directory settings | `$HOME` (optional on other machines) |
 | `system` | Reviewed `/etc` snapshots, including boot, NVIDIA, locale, pacman and custom system-service configuration | Manual review/copy only |
 | `snapshots` | Sanitized TeXstudio/MuseScore preferences and desktop-interface dconf export | Manual import only |
-| `extras` | Editable source and lockfile for the custom Vicinae wallpaper extension | Source only |
+| `extras` | Editable source for the Vicinae wallpaper extension, Hyprpaper patch, and Chrome layout restoration daemon | Source only |
 
 The layout mirrors actual config paths. In particular tmux stays at `tools/.tmux.conf`, matching the existing setup. Shell, tools and desktop packages can be used independently of the rice. The dashboard, wallpaper backend and compiled Vicinae extension are included so their integrations are not lost.
 
@@ -69,6 +69,12 @@ stow --verbose --delete --target="$HOME" rice tools shell desktop machine
 Only include packages you actually applied. Unstowing does not restore pre-existing files; restore those from your backup afterward. Add another category by creating a package directory containing its intended home-relative paths, then stow that package with the same explicit target. Keep a target path owned by one package only.
 
 ## Desktop integrations
+
+The Chrome layout restoration daemon's Rust source is in
+[`extras/hypr-chrome-resurrect`](extras/hypr-chrome-resurrect/README.md).
+Build and install it from that directory using its README. Hyprland autostart
+launches `~/.local/bin/hypr-chrome-resurrect daemon`; the executable is installed
+separately. The project is maintained as ordinary files in this repository.
 
 The dashboard launcher, desktop entry and user-service definition use relative links within `rice`. The SwayNC user-service override is included. Stow applies the definitions but does not restart programs or enable units.
 
