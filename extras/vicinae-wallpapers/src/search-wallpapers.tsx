@@ -5,6 +5,7 @@ import { search, image, save, Wallpaper } from "./online";
 
 export default function SearchWallpapers() {
   const [query, setQuery] = useState("");
+  const [retry, setRetry] = useState(0);
   const [items, setItems] = useState<Wallpaper[]>([]);
   const [mode, setMode] = useState<Mode>("dark");
   const [resolution, setResolution] = useState("");
@@ -39,7 +40,7 @@ export default function SearchWallpapers() {
         .finally(() => { if (!abort.signal.aborted) setLoading(false); });
     }, 400);
     return () => { clearTimeout(timer); abort.abort(); };
-  }, [query, page, resolution, ratio]);
+  }, [query, page, resolution, ratio, retry]);
   useEffect(() => {
     const item = items.find(item => item.id === selected);
     if (!item || assets[item.id]) return;
@@ -80,11 +81,13 @@ export default function SearchWallpapers() {
     <ActionPanel.Submenu title="Aspect Ratio" icon={Icon.MagnifyingGlass}>
       {["", "16x9", "16x10", "21x9", "9x16"].map(value => <Action key={value} title={value || "Any ratio"} onAction={() => { setRatio(value); setPage(1); }} />)}
     </ActionPanel.Submenu>
-    <Action title="Retry Search" icon={Icon.ArrowClockwise} onAction={() => { setQuery(value => value.endsWith(" ") ? value.trimEnd() : value + " "); setPage(1); }} />
+    <Action title="Retry Search" icon={Icon.ArrowClockwise} onAction={() => { setRetry(value => value + 1); setPage(1); }} />
   </ActionPanel.Section>;
+  // Reapplying searchText on detail renders resets selection in Vicinae 0.20.5.
+  // Let Vicinae own the input; query still drives the remote search.
   return <List isLoading={loading || working || preview.busy} isShowingDetail filtering={false}
     navigationTitle={`Search Wallpapers · ${resolution || "Any size"} · ${ratio || "Any ratio"}`}
-    searchBarPlaceholder="Search Wallhaven — Enter to download and try" searchText={query}
+    searchBarPlaceholder="Search Wallhaven — Enter to download and try"
     onSearchTextChange={text => { setQuery(text); setPage(1); }} onSelectionChange={setSelected}
     searchBarAccessory={<ModePicker mode={mode} onChange={setMode} />}
     actions={<ActionPanel>{filters}</ActionPanel>}>
