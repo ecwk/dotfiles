@@ -4,7 +4,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { homedir } from "node:os";
 const exec = promisify(execFile);
-type State = {iosAlbumArt:boolean;layout:string;layouts:{id:string;title:string}[];theme:string;themeAvailable:boolean;styleTui:boolean;styleBackground:boolean;monitor:string;monitors:string[];player:string;players:string[];widgets:{id:string;title:string;visible:boolean}[]};
+type State = {iosAlbumArt:boolean;musicDarkness:number;layout:string;layouts:{id:string;title:string}[];theme:string;themeAvailable:boolean;styleTui:boolean;styleBackground:boolean;monitor:string;monitors:string[];player:string;players:string[];widgets:{id:string;title:string;visible:boolean}[]};
 async function control(request:object):Promise<State> {
   await exec("systemctl",["--user","start","glass-dashboard.service"],{timeout:10000});
   const result=await exec(`${homedir()}/.local/bin/glass-dashboard`,["--control",JSON.stringify(request)],{timeout:15000});
@@ -12,7 +12,15 @@ async function control(request:object):Promise<State> {
 }
 function MusicAppearance({initial,onUpdate}:{initial:State;onUpdate:(state:State)=>void}) {
   const [enabled,setEnabled]=useState(initial.iosAlbumArt);
+  const [darkness,setDarkness]=useState(String(initial.musicDarkness));
   const [busy,setBusy]=useState(false);
+  async function changeDarkness(value:string) {
+    if(busy)return;
+    setBusy(true);
+    try {const next=await control({action:"musicDarkness",value:Number(value)});setDarkness(String(next.musicDarkness));onUpdate(next);}
+    catch(e){await showToast({style:Toast.Style.Failure,title:"Darkness update failed",message:String(e)});}
+    finally{setBusy(false);}
+  }
   async function change(value:boolean) {
     if(busy)return;
     setBusy(true);
@@ -22,6 +30,10 @@ function MusicAppearance({initial,onUpdate}:{initial:State;onUpdate:(state:State
   }
   return <Form navigationTitle="Music appearance" isLoading={busy}>
     <Form.Checkbox id="iosAlbumArt" label="iOS album art colors" value={enabled} onChange={change} />
+    <Form.Dropdown id="musicDarkness" title="Dark mode darkness" value={darkness} onChange={changeDarkness}>
+      {Array.from({length:21},(_,i)=>i*5).map(value=><Form.Dropdown.Item key={value} value={String(value)} title={`${value}%${value===65?" (Default)":""}`} />)}
+    </Form.Dropdown>
+    <Form.Description text="Higher percentages darken the artwork background in dark mode. Light mode keeps its existing appearance." />
     <Form.Description text="Use softly blurred artwork colors for the player. Colors remain while paused; missing artwork uses the dashboard theme. Changes save immediately." />
   </Form>;
 }

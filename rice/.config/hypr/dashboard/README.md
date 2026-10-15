@@ -156,3 +156,10 @@ and installed GTK/GSK GIR signatures. The settings checkbox uses the pinned Vici
 `Form.Checkbox` declarations (the online form documentation was unavailable).
 Run `GDK_BACKEND=wayland LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so /usr/bin/python tests/music_live_check.py`
 for an isolated visual/state check; it saves `/tmp/music-preview.png` and does not control a real player.
+
+Music appearance also has **Dark mode darkness**, a 0–100% selector in 5% steps
+(default 65%). It applies immediately, persists as `music_darkness`, and affects
+only dark mode. The control API exposes `musicDarkness` and accepts the same
+integer percentage through `{"action":"musicDarkness","value":65}`.
+Vicinae SDK 0.20.5 has no slider component; this uses its supported `Form.Dropdown`
+interface, verified against the installed version's declarations.

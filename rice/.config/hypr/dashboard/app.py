@@ -230,6 +230,7 @@ class FastfetchWidget:
 class MusicWidget:
     def __init__(self,app,panel):
         self.app=app; self.panel=panel; self.player=None; self.players=[]; self.art_url=''; self.props={}
+        self.position=0; self.position_at=time.monotonic()
         panel.root.add_css_class('music-card')
         self.backdrop=ArtworkBackdrop()
         overlay=Gtk.Overlay(); panel.set_child(None)
@@ -262,7 +263,8 @@ class MusicWidget:
         for b in (self.previous,self.play,self.next):
             controls.append(b); b.set_sensitive(False); b.add_css_class('transport')
         self.body.append(controls); panel.content.append(self.body)
-        self.refresh(); repeat(2,self.refresh)
+        self.refresh(); repeat(1,self.refresh)
+        self.progress_timer=GLib.timeout_add(100,self.update_progress)
     def resize(self,width,height):
         compact=width<360; large=height>=190
         self.controls.set_spacing(20 if compact else 54)
@@ -276,6 +278,7 @@ class MusicWidget:
         self.elapsed.set_visible(not compact); self.remaining.set_visible(not compact)
     def apply_art_mode(self):
         active=self.app.store.data.get('ios_album_art',True) and self.backdrop.texture is not None
+        self.backdrop.darkness=self.app.store.data.get('music_darkness',65)
         self.backdrop.enabled=active; self.backdrop.queue_draw()
         if active: self.panel.root.add_css_class('art-colors')
         else: self.panel.root.remove_css_class('art-colors')
@@ -298,17 +301,25 @@ class MusicWidget:
         self.play.set_sensitive(control and props.get('CanPause' if playing else 'CanPlay',False))
         self.previous.set_sensitive(control and props.get('CanGoPrevious',False))
         self.next.set_sensitive(control and props.get('CanGoNext',False))
-        length=max(0,meta.get('mpris:length',0)); pos=max(0,props.get('Position',0))
-        self.progress.set_fraction(min(1,pos/length) if length else 0)
-        self.elapsed.set_text(f'{int(pos/60_000_000)}:{int(pos/1_000_000)%60:02d}' if length else '')
-        left=max(0,length-pos)
-        self.remaining.set_text(f'-{int(left/60_000_000)}:{int(left/1_000_000)%60:02d}' if length else '')
+        self.position=max(0,props.get('Position',0)); self.position_at=time.monotonic()
+        self.update_progress()
         url=meta.get('mpris:artUrl','') if meta.get('xesam:title') else ''
         if url!=self.art_url:
             self.art_url=url; self.art.set_paintable(None)
             self.backdrop.texture=None; self.apply_art_mode()
             if url:
                 self.app.jobs.run('art-'+str(hash(url)),lambda:artwork_bytes(url),lambda data,err:self.set_art(url,data,err))
+    def update_progress(self):
+        length=max(0,self.props.get('Metadata',{}).get('mpris:length',0))
+        pos=self.position
+        if self.props.get('PlaybackStatus')=='Playing':
+            pos+=max(0,time.monotonic()-self.position_at)*1_000_000*self.props.get('Rate',1.0)
+        pos=max(0,min(pos,length)) if length else 0
+        self.progress.set_fraction(pos/length if length else 0)
+        self.elapsed.set_text(f'{int(pos/60_000_000)}:{int(pos/1_000_000)%60:02d}' if length else '')
+        left=max(0,length-pos)
+        self.remaining.set_text(f'-{int(left/60_000_000)}:{int(left/1_000_000)%60:02d}' if length else '')
+        return True
     def set_art(self,url,data,error):
         if url!=self.art_url or error: return
         try:
@@ -451,6 +462,8 @@ class Dashboard(Gtk.Application):
         self.theme_provider.load_from_string(css(self.theme_mode,self.palette))
         light=self.theme_mode=='full' and read_json(THEME_FILE,{}).get('mode')=='light'
         Gtk.Settings.get_default().set_property('gtk-interface-color-scheme',Gtk.InterfaceColorScheme.LIGHT if light else Gtk.InterfaceColorScheme.DARK)
+        self.music.backdrop.dark_mode=not light
+        self.music.backdrop.queue_draw()
         self.color_terminal(self.terminal.terminal,'btop')
         root=self.panels['btop'].root
         if self.theme_mode=='full' and not self.store.data.get('theme_btop_background',self.store.data.get('theme_btop',False)): root.add_css_class('btop-original')
@@ -477,7 +490,8 @@ class Dashboard(Gtk.Application):
         palette=read_palette()
         # Keep the last valid colors across transient invalid/incomplete publications.
         mode=read_appearance(self.theme_mode)
-        if mode!=self.theme_mode or (palette is not None and palette!=self.palette):
+        light=mode=='full' and read_json(THEME_FILE,{}).get('mode')=='light'
+        if mode!=self.theme_mode or (palette is not None and palette!=self.palette) or self.music.backdrop.dark_mode==light:
             self.theme_mode=mode
             if palette is not None: self.palette=palette
             self.apply_theme()
@@ -486,6 +500,7 @@ class Dashboard(Gtk.Application):
         return dict(layout=self.store.data.get('layout_presets',{}).get(self.monitor_key,'balanced-center'),
                     layouts=[dict(id=k,title=v['title']) for k,v in PRESETS.items()],theme=self.theme_mode,themeAvailable=bool(self.palette),
                     iosAlbumArt=bool(self.store.data.get('ios_album_art',True)),
+                    musicDarkness=self.store.data.get('music_darkness',65),
                     styleTui=bool(self.store.data.get('theme_btop',False)),
                     styleBackground=bool(self.store.data.get('theme_btop_background',self.store.data.get('theme_btop',False))),
                     monitor=self.monitor_key,monitors=[self.monitors.get_item(i).get_connector() for i in range(self.monitors.get_n_items())],
@@ -506,6 +521,9 @@ class Dashboard(Gtk.Application):
         elif action=='iosAlbumArt':
             if not isinstance(value,bool): raise ValueError('Expected boolean')
             self.store.data['ios_album_art']=value; self.music.apply_art_mode()
+        elif action=='musicDarkness':
+            if type(value) is not int or not 0<=value<=100: raise ValueError('Expected integer from 0 to 100')
+            self.store.data['music_darkness']=value; self.music.apply_art_mode()
         elif action=='visibility':
             key=request['widget']
             if key not in self.panels or not isinstance(value,bool): raise ValueError('Invalid widget visibility')
@@ -526,6 +544,7 @@ class Dashboard(Gtk.Application):
         for source in ('theme_reload_source','theme_retry'):
             if getattr(self,source,0): GLib.source_remove(getattr(self,source))
         if self.ready:
+            if hasattr(self,'music'): GLib.source_remove(self.music.progress_timer)
             self.save_layout()
             if hasattr(self,'terminal'): self.terminal.stop()
             self.spectrum.stop()

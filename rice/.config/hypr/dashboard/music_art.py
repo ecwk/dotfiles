@@ -10,6 +10,8 @@ class ArtworkBackdrop(Gtk.Widget):
         super().__init__()
         self.texture=None
         self.enabled=False
+        self.dark_mode=True
+        self.darkness=65
         self.set_hexpand(True); self.set_vexpand(True)
         self.set_can_target(False)
 
@@ -30,6 +32,6 @@ class ArtworkBackdrop(Gtk.Widget):
         snapshot.append_texture(self.texture,Graphene.Rect().init((w-iw)/2,(h-ih)/2,iw,ih))
         snapshot.pop()
         # Neutral veil mutes saturation and bounds brightness for white controls.
-        veil=Gdk.RGBA(); veil.parse('rgba(24,22,26,0.58)')
+        veil=Gdk.RGBA(); veil.parse(f'rgba(24,22,26,{self.darkness/100 if self.dark_mode else 0.58})')
         snapshot.append_color(veil,rect)
         snapshot.pop()
