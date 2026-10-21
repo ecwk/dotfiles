@@ -17,6 +17,8 @@ Canonical Linux configuration, organized as GNU Stow packages. The working check
 
 The layout mirrors actual config paths. In particular tmux stays at `tools/.tmux.conf`, matching the existing setup. Shell, tools and desktop packages can be used independently of the rice. The dashboard, wallpaper backend and compiled Vicinae extension are included so their integrations are not lost.
 
+The lock shortcut (`Super+Alt+L`) and Hypridle launch Hyprlock directly. Bright text and dark shadows keep labels readable over the blurred desktop without extra background sampling or preprocessing.
+
 ## Apply on a machine
 
 These instructions apply configuration only. Install the programs you intend to use separately. GNU Stow **2.4.1** was used to verify this layout.

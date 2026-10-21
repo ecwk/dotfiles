@@ -4,7 +4,7 @@ export XCURSOR_SIZE=24
 
 # Enable Nvidia
 export LIBVA_DRIVER_NAME=nvidia
-export __GLX_VENDOR_LIBRARY_NAME=nvidia
+# Let GLVND select the active GPU; forcing NVIDIA breaks AMD-only mode.
 
 # Enable VA-API Hardware Video Acceleration
 export NVD_BACKEND=direct
