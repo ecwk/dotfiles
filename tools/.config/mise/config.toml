@@ -1,7 +1,6 @@
 [tools]
-"aqua:aws/aws-sam-cli" = "latest"
-"aqua:pnpm" = "latest"
-"aqua:tombi-toml/tombi" = "latest"
+"npm:pnpm" = "latest"
+"npm:tombi" = "latest"
 aws-sam = { version = "latest", symlink_bins = "true" }
 bun = "latest"
 deno = "latest"
@@ -21,4 +20,4 @@ python = "latest"
 usage = "latest"
 
 [settings]
-python_compile = true
+python.compile = true
