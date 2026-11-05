@@ -108,7 +108,7 @@ and its installed theme examples. Fastfetch 2.69.0 accepts generated config thro
 
 Fastfetch GPU detection uses PCI enumeration with `hideType: integrated`; when none is detected, the GPU row says “Dedicated GPU unavailable”. Swap usage appears directly below RAM. Bluetooth and weather widgets have been removed; installed system packages are left in place.
 
-The GPU field first queries `nvidia-smi --query-gpu=name --format=csv,noheader` (NVIDIA utilities 615.78.08). A successful name is cached locally. When the driver is unavailable, `data/gpu.json` supplies an explicit fixed name, then the last detected name is tried. With neither available, native Fastfetch PCI detection remains the fallback. The field widens to fit long GPU names. Reference: [NVIDIA SMI query documentation](https://docs.nvidia.com/deploy/nvidia-smi/index.html).
+The GPU field reads the fixed name in `data/gpu.json`, then the saved name in the dashboard state directory. It never invokes `nvidia-smi` during refreshes, so displaying GPU identity does not wake the discrete GPU. With neither name available, native Fastfetch PCI detection remains the fallback. The launcher uses Cairo with OpenGL and Vulkan disabled for this process to avoid opening the discrete GPU for dashboard rendering. Desktop blur remains compositor-managed. See [GTK 4.24 runtime settings](https://docs.gtk.org/gtk4/running.html).
 
 Btop is launched with `--themes-dir` pointing to the generated theme directory. Btop 1.4.7 only resolves `color_theme` against its scanned theme list, even for absolute paths. `tests/btop_palette_check.py` checks real ANSI foreground/accent output in a temporary PTY to catch silent fallback to Default.
 

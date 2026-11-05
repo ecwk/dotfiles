@@ -1,6 +1,10 @@
 #!/bin/sh
 # Force native Wayland and load layer-shell before GTK opens the display.
 export GDK_BACKEND=wayland
+# Keep this always-running dashboard from opening/waking the discrete GPU.
+# Cairo preserves GTK drawing; Hyprland still handles the desktop blur.
+export GSK_RENDERER=cairo
+export GDK_DISABLE="${GDK_DISABLE:+$GDK_DISABLE,}gl,vulkan"
 # GTK 4.24 advertises an empty native blur region, overriding Hyprland layer rules.
 # Let the compositor apply our scoped blur rule instead (only this process).
 export GDK_WAYLAND_DISABLE="${GDK_WAYLAND_DISABLE:+$GDK_WAYLAND_DISABLE,}ext_background_effect_manager_v1"
